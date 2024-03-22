@@ -5,14 +5,15 @@ import numpy as np
 
 
 class MyPyBoyEnv(Env):
-    def __init__(self, game, pyboy_state, ticks_per_action=1):
+    def __init__(self, game, pyboy_state, ticks_per_action=1, force_gbc=True):
         super().__init__()
-        if ticks_per_action is not int:
+        if not isinstance(ticks_per_action, int):
             raise TypeError("ticks_per_action must be an integer")
         elif ticks_per_action < 1:
             raise ValueError("ticks_per_action must be a positive value")
-        self.pyboy = PyBoy(game)
-        self.pyboy.set_emulation_speed(0)
+        self.ticks_per_action = ticks_per_action
+        self.pyboy = PyBoy(game, cgb=force_gbc)
+        self.pyboy.set_emulation_speed(4)
         self.pyboy_state = open(pyboy_state, "rb")
         self.pyboy.load_state(self.pyboy_state)
         self.screen = self.pyboy.botsupport_manager().screen()
@@ -37,11 +38,18 @@ class MyPyBoyEnv(Env):
         super().reset(seed=seed)
         self.pyboy.load_state(self.pyboy_state)
 
-    def step(self, actions):
-        for x in range(self.action_space.shape[0]):
-            self.pyboy.send_input(self._action_to_input[x][1-actions[x]])
+    def step(self, action):
+        self.pyboy.send_input(self._action_to_input[action][0])
+        for _ in range(self.ticks_per_action):
+            self.pyboy.tick()
+        self.pyboy.send_input(self._action_to_input[action][1])
+        observation = self.render()
+        reward = 0
+        info = {}
+        truncated = False
+        terminated = False
 
-        pass
+        return observation, reward, terminated, truncated, info
 
     def close(self):
         self.pyboy.stop(save=False)
