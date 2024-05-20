@@ -152,7 +152,4 @@ cython_debug/
 #.idea/
 
 # Gameboy rom files
-roms/
-Roms/
-ROMS/
 *.gbc
