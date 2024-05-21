@@ -30,6 +30,7 @@ if __name__ == '__main__':
             'amsgrad': True
         },
         'network': 'ConvolutionWithDuelingFeedForwardNN',
+        'activation_function': "ReLU",
         'obs_shape': env.observation_space.shape,
         'action_shape': int(env.action_space.n),
         'target_epoch': 50,

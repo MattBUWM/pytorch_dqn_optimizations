@@ -11,8 +11,8 @@ def _get_network_class(name):
     return getattr(module, name)
 
 
-def get_network(name, in_dim, out_dim) -> nn.Module:
-    return _get_network_class(name)(in_dim, out_dim)
+def get_network(name, in_dim, out_dim, activation) -> nn.Module:
+    return _get_network_class(name)(in_dim, out_dim, activation=activation)
 
 
 class BaseModel:
@@ -26,6 +26,7 @@ class BaseModel:
         if self.optimizer_parameters['optimizer'] not in SupportedOptims:
             raise ValueError('optimizer not recognized or supported')
         self.network_type = parameters['network']
+        self.activation_function = parameters['activation_function']
         self.target_epoch = parameters['target_epoch']
         if load_existing:
             self.current_epoch = parameters['current_epoch']

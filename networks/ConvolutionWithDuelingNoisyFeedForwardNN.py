@@ -5,8 +5,28 @@ from networks.Layers import NoisyLinearLayer
 
 class ConvolutionWithDuelingFeedForwardNN(nn.Module):
 
-    def __init__(self, in_dim, out_dim):
+    def __init__(self, in_dim, out_dim, activation=None):
         super(ConvolutionWithDuelingFeedForwardNN, self).__init__()
+        if activation is None:
+            self.activation1_conv = lambda x: x
+            self.activation2_conv = lambda x: x
+
+            self.activation1_adv = lambda x: x
+            self.activation1_val = lambda x: x
+
+            self.activation2_adv = lambda x: x
+            self.activation2_val = lambda x: x
+        else:
+            activation_layer = getattr(nn, activation)
+            self.activation1_conv = activation_layer()
+            self.activation2_conv = activation_layer()
+
+            self.activation1_adv = activation_layer()
+            self.activation1_val = activation_layer()
+
+            self.activation2_adv = activation_layer()
+            self.activation2_val = activation_layer()
+
         conv_kernel = (8, 8)
         pool_kernel = (2, 2)
         channels_mult = 5
@@ -39,16 +59,25 @@ class ConvolutionWithDuelingFeedForwardNN(nn.Module):
         self.layer3_val = NoisyLinearLayer(128, 1)
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
+        x = self.conv1(x)
+        x = self.activation1_conv(x)
         x = self.pool1(x)
-        x = F.relu(self.conv2(x))
+
+        x = self.conv2(x)
+        x = self.activation2_conv(x)
         x = self.pool2(x)
 
-        adv = F.relu(self.layer1_adv(x.reshape(-1, self.final_size)))
-        val = F.relu(self.layer1_val(x.reshape(-1, self.final_size)))
+        adv = self.layer1_adv(x.reshape(-1, self.final_size))
+        val = self.layer1_val(x.reshape(-1, self.final_size))
 
-        adv = F.relu(self.layer2_adv(adv))
-        val = F.relu(self.layer2_val(val))
+        adv = self.activation1_adv(adv)
+        val = self.activation1_val(val)
+
+        adv = self.layer2_adv(adv)
+        val = self.layer2_val(val)
+
+        adv = self.activation2_adv(adv)
+        val = self.activation2_val(val)
 
         adv = self.layer3_adv(adv)
         val = self.layer3_val(val)

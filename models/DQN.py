@@ -17,7 +17,7 @@ Transition = namedtuple('Transition',
 
 
 class DQN(BaseModel.BaseModel):
-    def __init__(self, parameters, load_existing=False):
+    def __init__(self, parameters, load_existing=False, load_specific=None):
         super().__init__(parameters, load_existing)
         self.obs_shape = parameters['obs_shape']
         self.action_shape = parameters['action_shape']
@@ -32,20 +32,26 @@ class DQN(BaseModel.BaseModel):
         self.optimizer = None
         self._init_network()
         if load_existing:
-            self._load()
+            self._load(load_specific)
 
     def _init_network(self):
-        self.target_net = BaseModel.get_network(self.network_type, self.obs_shape, self.action_shape).to(self.device)
-        self.policy_net = BaseModel.get_network(self.network_type, self.obs_shape, self.action_shape).to(self.device)
+        self.target_net = BaseModel.get_network(self.network_type, self.obs_shape, self.action_shape, self.activation_function).to(self.device)
+        self.policy_net = BaseModel.get_network(self.network_type, self.obs_shape, self.action_shape, self.activation_function).to(self.device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         if self.optimizer_parameters['optimizer'] == 'AdamW':
             self.optimizer = torch.optim.AdamW(self.policy_net.parameters(), lr=self.optimizer_parameters['lr'], amsgrad=self.optimizer_parameters['amsgrad'])
         if self.optimizer_parameters['optimizer'] == 'Adam':
             self.optimizer = torch.optim.Adam(self.policy_net.parameters(), lr=self.optimizer_parameters['lr'], amsgrad=self.optimizer_parameters['amsgrad'])
 
-    def _load(self):
-        self.target_net.load_state_dict(torch.load(self.model_path + '/target/checkpoint' + str(self.current_epoch) + '.pt'))
-        self.policy_net.load_state_dict(torch.load(self.model_path + '/policy/checkpoint' + str(self.current_epoch) + '.pt'))
+    def _load(self, load_specific=None):
+        if load_specific is None:
+            self.target_net.load_state_dict(torch.load(self.model_path + '/target/checkpoint' + str(self.current_epoch) + '.pt'))
+            self.policy_net.load_state_dict(torch.load(self.model_path + '/policy/checkpoint' + str(self.current_epoch) + '.pt'))
+        else:
+            self.target_net.load_state_dict(
+                torch.load(self.model_path + '/target/checkpoint' + str(load_specific) + '.pt'))
+            self.policy_net.load_state_dict(
+                torch.load(self.model_path + '/policy/checkpoint' + str(load_specific) + '.pt'))
         self.optimizer.load_state_dict(torch.load(self.model_path + '/optimizer.pt'))
         self.replay_mem = torch.load(self.model_path + '/replay.temp')
 
@@ -134,6 +140,7 @@ class DQN(BaseModel.BaseModel):
             'model_path': self.model_path,
             'optimizer_parameters': self.optimizer_parameters,
             'network': self.network_type,
+            'activation_function': self.activation_function,
             'obs_shape': self.obs_shape,
             'action_shape': self.action_shape,
             'target_epoch': self.target_epoch,
@@ -158,7 +165,7 @@ class DQN(BaseModel.BaseModel):
         torch.save(self.replay_mem, self.model_path + '/replay.temp')
 
     @staticmethod
-    def load(model_path) -> DQN:
+    def load(model_path, load_specific=None) -> DQN:
         parameters = json.load(open(model_path + '/parameters.json'))
-        model = DQN(parameters, load_existing=True)
+        model = DQN(parameters, load_existing=True, load_specific=load_specific)
         return model

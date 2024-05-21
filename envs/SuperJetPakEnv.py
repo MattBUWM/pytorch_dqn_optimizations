@@ -47,26 +47,30 @@ class RewardCalculator:
 
 
 class ImageProcessor:
-    def __init__(self, pyboy: PyBoy):
+    def __init__(self, pyboy: PyBoy, flatten=False):
         self.size_in = pyboy.screen.ndarray.shape
         self.size_out = (self.size_in[0], self.size_in[1])
+        self.flatten = flatten
         self.images = [np.zeros((self.size_in[0], self.size_in[1]), dtype=np.uint8),
                        np.zeros((self.size_in[0], self.size_in[1]), dtype=np.uint8),
                        np.zeros((self.size_in[0], self.size_in[1]), dtype=np.uint8),
                        np.zeros((self.size_in[0], self.size_in[1]), dtype=np.uint8)]
-        self.size_out = (4, self.size_in[0], self.size_in[1])
+        if flatten:
+            self.size_out = 4 * self.size_in[0] * self.size_in[1]
+        else:
+            self.size_out = (4, int(self.size_in[0]), int(self.size_in[1]))
 
-    def process(self, img, flatten=False, grayscale=True):
+    def process(self, img, grayscale=True):
         processed = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if grayscale else img
         self.images.pop(0)
         self.images.append(processed)
         array = np.array(self.images)
-        if flatten:
+        if self.flatten:
             return array.flatten()
         else:
             return array
 
-    def processed_shape(self):
+    def processed_shape(self) -> int | tuple:
         return self.size_out
 
     def reset(self, pyboy: PyBoy):
@@ -115,15 +119,18 @@ class SuperJetPakEnv(Env):
             self.action_space = spaces.Discrete(len(self._action_to_input) - 2, start=0)
         else:
             self.action_space = spaces.MultiDiscrete([3, 3, 2, 2])
-        self.image_process_obj = ImageProcessor(self.pyboy)
+        self.image_process_obj = ImageProcessor(self.pyboy, flatten=self.flatten)
         self.processed_shape = self.image_process_obj.processed_shape()
         print(self.processed_shape)
-        self.observation_space = spaces.Box(low=0, high=255, shape=self.processed_shape, dtype=np.uint8)
+        if self.flatten:
+            self.observation_space = spaces.Box(low=0, high=255, shape=(self.processed_shape,), dtype=np.uint8)
+        else:
+            self.observation_space = spaces.Box(low=0, high=255, shape=self.processed_shape, dtype=np.uint8)
         self.reward_obj = RewardCalculator(self.pyboy)
 
     def render(self):
         game_pixels_render = self.screen.ndarray.copy()
-        game_pixels_render = cv2.resize(game_pixels_render, (self.processed_shape[1] * 4, self.processed_shape[2] * 4))
+        game_pixels_render = cv2.resize(game_pixels_render, (game_pixels_render.shape[0] * 4, game_pixels_render.shape[1] * 4))
         cv2.imshow('game_state', game_pixels_render)
         cv2.waitKey(16)
 
@@ -134,7 +141,7 @@ class SuperJetPakEnv(Env):
         self.reward_obj.reset(self.pyboy)
         self.image_process_obj.reset(self.pyboy)
         game_pixels_render = self.screen.ndarray.copy()
-        observation = self.image_process_obj.process(game_pixels_render, flatten=self.flatten, grayscale=self.grayscale)
+        observation = self.image_process_obj.process(game_pixels_render, grayscale=self.grayscale)
         info = {}
         return observation, info
 
@@ -152,7 +159,7 @@ class SuperJetPakEnv(Env):
                 self.pyboy.button(self._action_to_input[5], self.ticks_per_action)
         self.pyboy.tick(self.ticks_per_action)
         game_pixels_render = self.screen.ndarray.copy()
-        observation = self.image_process_obj.process(game_pixels_render, flatten=self.flatten, grayscale=self.grayscale)
+        observation = self.image_process_obj.process(game_pixels_render, grayscale=self.grayscale)
         reward = self.reward_obj.get_reward(self.pyboy)
         info = {}
         truncated = False

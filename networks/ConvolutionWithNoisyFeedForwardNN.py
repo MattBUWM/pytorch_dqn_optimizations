@@ -6,8 +6,21 @@ from networks.Layers import NoisyLinearLayer
 
 class ConvolutionWithNoisyFeedForwardNN(nn.Module):
 
-    def __init__(self, in_dim, out_dim):
+    def __init__(self, in_dim, out_dim, activation=None):
         super(ConvolutionWithNoisyFeedForwardNN, self).__init__()
+        if activation is None:
+            self.activation1_conv = lambda x: x
+            self.activation2_conv = lambda x: x
+
+            self.activation1 = lambda x: x
+            self.activation2 = lambda x: x
+        else:
+            activation_layer = getattr(nn, activation)
+            self.activation1_conv = activation_layer()
+            self.activation2_conv = activation_layer()
+
+            self.activation1 = activation_layer()
+            self.activation2 = activation_layer()
         conv_kernel = (8, 8)
         pool_kernel = (2, 2)
         channels_mult = 5
@@ -37,10 +50,20 @@ class ConvolutionWithNoisyFeedForwardNN(nn.Module):
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
-        x = F.relu(self.conv1(x))
+        x = self.conv1(x)
+        x = self.activation1_conv(x)
         x = self.pool1(x)
-        x = F.relu(self.conv2(x))
+
+        x = self.conv2(x)
+        x = self.activation2_conv(x)
         x = self.pool2(x)
-        x = F.relu(self.layer1(x.reshape(-1, self.final_size)))
-        x = F.relu(self.layer2(x))
-        return self.layer3(x)
+
+        x = self.layer1(x.reshape(-1, self.final_size))
+        x = self.activation1(x)
+
+        x = self.layer2(x)
+        x = self.activation2(x)
+
+        x = self.layer3(x)
+
+        return x
