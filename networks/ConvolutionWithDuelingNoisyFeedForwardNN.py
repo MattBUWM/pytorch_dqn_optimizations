@@ -50,14 +50,10 @@ class ConvolutionWithDuelingFeedForwardNN(nn.Module):
         adv = F.relu(self.layer2_adv(adv))
         val = F.relu(self.layer2_val(val))
 
-        adv = F.relu(self.layer3_adv(adv))
-        val = F.relu(self.layer3_val(val))
+        adv = self.layer3_adv(adv)
+        val = self.layer3_val(val)
 
-        adv_mean = adv.mean(1)
-        adv_mean = adv_mean.unsqueeze(1)
-        adv_mean = adv_mean.expand(x.size(0), self.out_dim)
-
-        # print(adv, adv_mean)
+        adv_mean = adv.mean(1, keepdim=True)
 
         x = val + adv - adv_mean
 
