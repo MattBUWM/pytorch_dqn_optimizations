@@ -31,6 +31,13 @@ class DQN(BaseModel.BaseModel):
         self.policy_net = None
         self.optimizer = None
         self._init_network()
+        self.statistics = {
+            'episode_rewards_mean': [],
+            'episode_rewards_sum': [],
+            'episode_lengths': [],
+            'episode_loss_mean': []
+        }
+        self.current_episode_loss = []
         if load_existing:
             self._load(load_specific)
 
@@ -45,8 +52,8 @@ class DQN(BaseModel.BaseModel):
 
     def _load(self, load_specific=None):
         if load_specific is None:
-            self.target_net.load_state_dict(torch.load(self.model_path + '/target/checkpoint' + str(self.current_epoch) + '.pt'))
-            self.policy_net.load_state_dict(torch.load(self.model_path + '/policy/checkpoint' + str(self.current_epoch) + '.pt'))
+            self.target_net.load_state_dict(torch.load(self.model_path + '/target/checkpoint' + str(self.current_episode) + '.pt'))
+            self.policy_net.load_state_dict(torch.load(self.model_path + '/policy/checkpoint' + str(self.current_episode) + '.pt'))
         else:
             self.target_net.load_state_dict(
                 torch.load(self.model_path + '/target/checkpoint' + str(load_specific) + '.pt'))
@@ -55,15 +62,16 @@ class DQN(BaseModel.BaseModel):
         self.optimizer.load_state_dict(torch.load(self.model_path + '/optimizer.pt'))
         self.replay_mem = torch.load(self.model_path + '/replay.temp')
 
-    def training_epoch(self, env):
-        print('Starting training epoch ', self.current_epoch + 1)
-        reward_sum = 0
+    def training_episode(self, env):
+        print('Starting training episode ', self.current_episode + 1)
+        episode_rewards = []
+        self.current_episode_loss.clear()
         state, info = env.reset()
         state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
         for t in count():
             action = self.predict(state, env, training=True)
             observation, reward, terminated, truncated, _ = env.step(action.item())
-            reward_sum += reward
+            episode_rewards.append(reward)
             reward = torch.tensor([reward], device=self.device)
             done = terminated or truncated
 
@@ -85,7 +93,15 @@ class DQN(BaseModel.BaseModel):
             self.target_net.load_state_dict(target_net_state_dict)
 
             if done:
-                self.steps_done += t + 1
+                self.statistics['episode_lengths'].append(t + 1)
+                rewards_sum = sum(episode_rewards)
+                self.statistics['episode_rewards_sum'].append(rewards_sum)
+                self.statistics['episode_rewards_mean'].append(rewards_sum / len(episode_rewards))
+                self.statistics['episode_loss_mean'].append(sum(self.current_episode_loss) / len(self.current_episode_loss))
+                print("episode length:", self.statistics['episode_lengths'][-1])
+                print("episode reward sum:", self.statistics['episode_rewards_sum'][-1])
+                print("episode mean reward :", self.statistics['episode_rewards_mean'][-1])
+                print("episode mean loss:", self.statistics['episode_loss_mean'][-1])
                 break
 
     def _optimize(self):
@@ -115,6 +131,8 @@ class DQN(BaseModel.BaseModel):
         criterion = nn.SmoothL1Loss()
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
 
+        self.current_episode_loss.append(loss.item())
+
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
@@ -135,34 +153,39 @@ class DQN(BaseModel.BaseModel):
             with torch.no_grad():
                 return self.target_net(observation).max(1).indices.view(1, 1)
 
-    def save(self):
-        parameters = {
-            'model_path': self.model_path,
-            'optimizer_parameters': self.optimizer_parameters,
-            'network': self.network_type,
-            'activation_function': self.activation_function,
-            'obs_shape': self.obs_shape,
-            'action_shape': self.action_shape,
-            'target_epoch': self.target_epoch,
-            'current_epoch': self.current_epoch,
-            'steps_done': self.steps_done,
-            'batch_size': self.batch_size,
-            'save_freq': self.save_freq,
-            'replay_memory_capacity': self.replay_memory_capacity,
-            'gamma': self.gamma,
-            'tau': self.tau,
-            'epsilon': self.epsilon
-        }
-        with open(self.model_path + '/parameters.json', 'w') as f:
-            json.dump(parameters, f, ensure_ascii=False, indent=4)
+    def save(self, full_save=True):
         if not os.path.exists(self.model_path + '/target'):
             os.makedirs(self.model_path + '/target')
         if not os.path.exists(self.model_path + '/policy'):
             os.makedirs(self.model_path + '/policy')
-        torch.save(self.target_net.state_dict(), self.model_path + '/target/checkpoint' + str(self.current_epoch) + '.pt')
-        torch.save(self.policy_net.state_dict(), self.model_path + '/policy/checkpoint' + str(self.current_epoch) + '.pt')
-        torch.save(self.optimizer.state_dict(), self.model_path + '/optimizer.pt')
-        torch.save(self.replay_mem, self.model_path + '/replay.temp')
+        if full_save:
+            parameters = {
+                'model_path': self.model_path,
+                'optimizer_parameters': self.optimizer_parameters,
+                'network': self.network_type,
+                'activation_function': self.activation_function,
+                'obs_shape': self.obs_shape,
+                'action_shape': self.action_shape,
+                'target_episode': self.target_episode,
+                'current_episode': self.current_episode,
+                'steps_done': self.steps_done,
+                'batch_size': self.batch_size,
+                'save_freq': self.save_freq,
+                'replay_memory_capacity': self.replay_memory_capacity,
+                'gamma': self.gamma,
+                'tau': self.tau,
+                'epsilon': self.epsilon
+            }
+            with open(self.model_path + '/parameters.json', 'w') as f:
+                json.dump(parameters, f, ensure_ascii=False, indent=4)
+            with open(self.model_path + '/statistics.json', 'w') as f:
+                json.dump(self.statistics, f, ensure_ascii=False, indent=4)
+            torch.save(self.optimizer.state_dict(), self.model_path + '/optimizer.pt')
+            torch.save(self.replay_mem, self.model_path + '/replay.temp')
+        torch.save(self.target_net.state_dict(),
+                   self.model_path + '/target/checkpoint' + str(self.current_episode) + '.pt')
+        torch.save(self.policy_net.state_dict(),
+                   self.model_path + '/policy/checkpoint' + str(self.current_episode) + '.pt')
 
     @staticmethod
     def load(model_path, load_specific=None) -> DQN:

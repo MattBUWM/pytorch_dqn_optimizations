@@ -121,7 +121,6 @@ class SuperJetPakEnv(Env):
             self.action_space = spaces.MultiDiscrete([3, 3, 2, 2])
         self.image_process_obj = ImageProcessor(self.pyboy, flatten=self.flatten)
         self.processed_shape = self.image_process_obj.processed_shape()
-        print(self.processed_shape)
         if self.flatten:
             self.observation_space = spaces.Box(low=0, high=255, shape=(self.processed_shape,), dtype=np.uint8)
         else:

@@ -27,29 +27,31 @@ class BaseModel:
             raise ValueError('optimizer not recognized or supported')
         self.network_type = parameters['network']
         self.activation_function = parameters['activation_function']
-        self.target_epoch = parameters['target_epoch']
+        self.target_episode = parameters['target_episode']
         if load_existing:
-            self.current_epoch = parameters['current_epoch']
+            self.current_episode = parameters['current_episode']
             self.steps_done = parameters['steps_done']
         else:
-            self.current_epoch = 0
+            self.current_episode = 0
             self.steps_done = 0
         self.save_freq = parameters['save_freq']
 
     def train(self, env):
-        for epoch in range(self.target_epoch - self.current_epoch):
-            self.training_epoch(env)
-            self.current_epoch += 1
-            if self.current_epoch % self.save_freq == 0:
+        for episode in range(self.target_episode - self.current_episode):
+            self.training_episode(env)
+            self.current_episode += 1
+            if self.current_episode % self.save_freq == 0:
                 self.save()
+            else:
+                self.save(full_save=False)
 
-    def training_epoch(self, env):
+    def training_episode(self, env):
         raise NotImplementedError
 
     def predict(self, observation, env, training=True):
         raise NotImplementedError
 
-    def save(self):
+    def save(self, full_save=True):
         raise NotImplementedError
 
     @staticmethod

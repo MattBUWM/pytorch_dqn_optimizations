@@ -19,7 +19,7 @@ if __name__ == '__main__':
                                              force_gbc=False,
                                              ticks_per_action=4,
                                              force_discrete=True,
-                                             flatten=False,
+                                             flatten=True,
                                              grayscale=True)
 
     model_parameters = {
@@ -29,20 +29,20 @@ if __name__ == '__main__':
             'lr': 1e-4,
             'amsgrad': True
         },
-        'network': 'ConvolutionWithDuelingFeedForwardNN',
+        'network': 'FeedForwardNN',
         'activation_function': "ReLU",
         'obs_shape': env.observation_space.shape,
         'action_shape': int(env.action_space.n),
-        'target_epoch': 50,
+        'target_episode': 50,
         'batch_size': 128,
         'save_freq': 5,
-        'replay_memory_capacity': 2500,
+        'replay_memory_capacity': 100000,
         'gamma': 0.98,
         'tau': 0.0075,
         'epsilon': {
             'start': 0.9,
             'end': 0.05,
-            'decay': 25000,
+            'decay': 10000,
         }
     }
     model = get_model('DQN', model_parameters)
