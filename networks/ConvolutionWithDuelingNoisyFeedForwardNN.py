@@ -3,10 +3,10 @@ import torch.nn.functional as F
 
 from networks.Layers import NoisyLinearLayer
 
-class ConvolutionWithDuelingFeedForwardNN(nn.Module):
+class ConvolutionWithDuelingNoisyFeedForwardNN(nn.Module):
 
     def __init__(self, in_dim, out_dim, activation=None):
-        super(ConvolutionWithDuelingFeedForwardNN, self).__init__()
+        super(ConvolutionWithDuelingNoisyFeedForwardNN, self).__init__()
         if activation is None:
             self.activation1_conv = lambda x: x
             self.activation2_conv = lambda x: x

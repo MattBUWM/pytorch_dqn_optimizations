@@ -63,3 +63,14 @@ class ConvolutionWithFeedForwardNN(nn.Module):
         x = self.layer3(x)
 
         return x
+
+    def visualisation(self, x):
+        x1 = self.conv1(x)
+        x1 = self.activation1_conv(x)
+        x1 = self.pool1(x)
+
+        x2 = self.conv2(x)
+        x2 = self.activation2_conv(x)
+        x2 = self.pool2(x)
+
+        print(x2.shape)

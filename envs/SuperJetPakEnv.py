@@ -11,7 +11,6 @@ class RewardCalculator:
         self.previous_score_high = pyboy.memory[0xc187]
         self.previous_lives = pyboy.memory[0xc211]
         self.ship_state = pyboy.memory[0xc20c]
-        self.paused = pyboy.memory[0xc1f4] == 200
         self.visited_positions = []
 
     def print_values(self, pyboy: PyBoy):
@@ -24,8 +23,7 @@ class RewardCalculator:
         new_score_high = pyboy.memory[0xc187]
         new_lives = pyboy.memory[0xc211]
         new_ship_state = pyboy.memory[0xc20c]
-        self.paused = pyboy.memory[0xc1f4] == 200
-        reward_value = (new_score_low - self.previous_score_low) + 255 * (new_score_high - self.previous_score_high) + 10 * (new_lives - self.previous_lives) - 1 * self.paused
+        reward_value = (new_score_low - self.previous_score_low) + 255 * (new_score_high - self.previous_score_high) + 10 * (new_lives - self.previous_lives)
         if (pyboy.memory[0xc200], pyboy.memory[0xc202]) not in self.visited_positions:
             self.visited_positions.append((pyboy.memory[0xc200], pyboy.memory[0xc202]))
             reward_value += 1
@@ -35,7 +33,7 @@ class RewardCalculator:
         self.previous_score_high = new_score_high
         self.previous_lives = new_lives
         self.ship_state = new_ship_state
-        return reward_value
+        return reward_value/10
 
     def reset(self, pyboy: PyBoy):
         self.previous_score_low = pyboy.memory[0xc186]
@@ -103,20 +101,19 @@ class SuperJetPakEnv(Env):
             self.pyboy.load_state(x)
         self.screen = self.pyboy.screen
         self._action_to_input = [
+            'no_op',
             'up',
             'down',
             'left',
             'right',
             'a',
             'b',
-            'select',
-            'start'
         ]
         self.force_discrete = force_discrete
         self.flatten = flatten
         self.grayscale = grayscale
         if self.force_discrete:
-            self.action_space = spaces.Discrete(len(self._action_to_input) - 2, start=0)
+            self.action_space = spaces.Discrete(len(self._action_to_input), start=0)
         else:
             self.action_space = spaces.MultiDiscrete([3, 3, 2, 2])
         self.image_process_obj = ImageProcessor(self.pyboy, flatten=self.flatten)
@@ -127,11 +124,14 @@ class SuperJetPakEnv(Env):
             self.observation_space = spaces.Box(low=0, high=255, shape=self.processed_shape, dtype=np.uint8)
         self.reward_obj = RewardCalculator(self.pyboy)
 
-    def render(self):
+    def render(self, array=False):
         game_pixels_render = self.screen.ndarray.copy()
-        game_pixels_render = cv2.resize(game_pixels_render, (game_pixels_render.shape[0] * 4, game_pixels_render.shape[1] * 4))
-        cv2.imshow('game_state', game_pixels_render)
-        cv2.waitKey(16)
+        if not array:
+            game_pixels_render = cv2.resize(game_pixels_render, (game_pixels_render.shape[0] * 4, game_pixels_render.shape[1] * 4))
+            cv2.imshow('game_state', game_pixels_render)
+            cv2.waitKey(16)
+        else:
+            return cv2.cvtColor(game_pixels_render, cv2.COLOR_BGR2GRAY)
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -146,7 +146,8 @@ class SuperJetPakEnv(Env):
 
     def step(self, action):
         if self.force_discrete:
-            self.pyboy.button(self._action_to_input[action], self.ticks_per_action)
+            if action != 0:
+                self.pyboy.button(self._action_to_input[action], self.ticks_per_action)
         else:
             if action[0] != 0:
                 self.pyboy.button(self._action_to_input[action[0] - 1], self.ticks_per_action)

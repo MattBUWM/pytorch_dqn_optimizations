@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import json
 import math
 import os
@@ -11,19 +12,25 @@ import torch
 from torch import nn
 
 import models.BaseModel as BaseModel
+from utils.PER import PER
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 
 class DQN(BaseModel.BaseModel):
-    def __init__(self, parameters, load_existing=False, load_specific=None):
+    def __init__(self, parameters, load_existing=False, load_specific=None, per=False):
         super().__init__(parameters, load_existing)
         self.obs_shape = parameters['obs_shape']
         self.action_shape = parameters['action_shape']
         self.batch_size = parameters['batch_size']
         self.replay_memory_capacity = parameters['replay_memory_capacity']
-        self.replay_mem = deque(maxlen=self.replay_memory_capacity)
+        if per:
+            self.per = True
+            self.replay_mem = PER(self.replay_memory_capacity, device=self.device)
+        else:
+            self.per = False
+            self.replay_mem = deque(maxlen=self.replay_memory_capacity)
         self.gamma = parameters['gamma']
         self.tau = parameters['tau']
         self.epsilon = parameters['epsilon']
@@ -34,8 +41,9 @@ class DQN(BaseModel.BaseModel):
         self.statistics = {
             'episode_rewards_mean': [],
             'episode_rewards_sum': [],
-            'episode_lengths': [],
-            'episode_loss_mean': []
+            'episode_steps_count': [],
+            'episode_loss_mean': [],
+            'episode_training_time': [],
         }
         self.current_episode_loss = []
         if load_existing:
@@ -60,10 +68,13 @@ class DQN(BaseModel.BaseModel):
             self.policy_net.load_state_dict(
                 torch.load(self.model_path + '/policy/checkpoint' + str(load_specific) + '.pt'))
         self.optimizer.load_state_dict(torch.load(self.model_path + '/optimizer.pt'))
-        self.replay_mem = torch.load(self.model_path + '/replay.temp')
+        # self.replay_mem = torch.load(self.model_path + '/replay.temp')
 
     def training_episode(self, env):
         print('Starting training episode ', self.current_episode + 1)
+        if self.per:
+            self.replay_mem.update_episode(self.current_episode)
+        start_time = time.time()
         episode_rewards = []
         self.current_episode_loss.clear()
         state, info = env.reset()
@@ -80,7 +91,17 @@ class DQN(BaseModel.BaseModel):
             else:
                 next_state = torch.tensor(observation, dtype=torch.float32, device=self.device).unsqueeze(0)
 
-            self.replay_mem.append(Transition(state, action, next_state, reward))
+            if self.per:
+                with torch.no_grad():
+                    state_value = self.policy_net(state).max(1).values
+                    if not terminated:
+                        next_state_value = self.target_net(next_state).max(1).values
+                    else:
+                        next_state_value = torch.zeros(1, device=self.device)
+                    td_error = torch.abs(state_value - (next_state_value * self.gamma + reward)).detach().item()
+                self.replay_mem.append(Transition(state, action, next_state, reward), td_error)
+            else:
+                self.replay_mem.append(Transition(state, action, next_state, reward))
 
             state = next_state
 
@@ -93,12 +114,14 @@ class DQN(BaseModel.BaseModel):
             self.target_net.load_state_dict(target_net_state_dict)
 
             if done:
-                self.statistics['episode_lengths'].append(t + 1)
+                self.statistics['episode_training_time'].append(time.time() - start_time)
+                self.statistics['episode_steps_count'].append(t + 1)
                 rewards_sum = sum(episode_rewards)
                 self.statistics['episode_rewards_sum'].append(rewards_sum)
                 self.statistics['episode_rewards_mean'].append(rewards_sum / len(episode_rewards))
                 self.statistics['episode_loss_mean'].append(sum(self.current_episode_loss) / len(self.current_episode_loss))
-                print("episode length:", self.statistics['episode_lengths'][-1])
+                print("episode training time:", self.statistics['episode_training_time'][-1])
+                print("episode steps count:", self.statistics['episode_steps_count'][-1])
                 print("episode reward sum:", self.statistics['episode_rewards_sum'][-1])
                 print("episode mean reward :", self.statistics['episode_rewards_mean'][-1])
                 print("episode mean loss:", self.statistics['episode_loss_mean'][-1])
@@ -106,8 +129,11 @@ class DQN(BaseModel.BaseModel):
 
     def _optimize(self):
         if len(self.replay_mem) < self.batch_size:
-            return
-        transitions = random.sample(self.replay_mem, self.batch_size)
+            return None
+        if self.per:
+            idxs, transitions = self.replay_mem.get_transition_batch(self.batch_size)
+        else:
+            transitions = random.sample(self.replay_mem, self.batch_size)
 
         batch = Transition(*zip(*transitions))
 
@@ -120,23 +146,27 @@ class DQN(BaseModel.BaseModel):
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
+        state_values = self.policy_net(state_batch)
+        state_action_values = state_values.gather(1, action_batch)
 
         next_state_values = torch.zeros(self.batch_size, device=self.device)
         with torch.no_grad():
             next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1).values
 
         expected_state_action_values = (next_state_values * self.gamma) + reward_batch
-
-        criterion = nn.SmoothL1Loss()
+        criterion = nn.HuberLoss()
         loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
-
+        td_errors = torch.abs(state_values.max(1).values - expected_state_action_values).detach().tolist()
         self.current_episode_loss.append(loss.item())
 
         self.optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_value_(self.policy_net.parameters(), 100)
         self.optimizer.step()
+
+        if self.per:
+            self.replay_mem.update_td_error(idxs, td_errors)
+
 
     def predict(self, observation, env, training=False):
         if training:
@@ -181,7 +211,7 @@ class DQN(BaseModel.BaseModel):
             with open(self.model_path + '/statistics.json', 'w') as f:
                 json.dump(self.statistics, f, ensure_ascii=False, indent=4)
             torch.save(self.optimizer.state_dict(), self.model_path + '/optimizer.pt')
-            torch.save(self.replay_mem, self.model_path + '/replay.temp')
+            # torch.save(self.replay_mem, self.model_path + '/replay.temp')
         torch.save(self.target_net.state_dict(),
                    self.model_path + '/target/checkpoint' + str(self.current_episode) + '.pt')
         torch.save(self.policy_net.state_dict(),

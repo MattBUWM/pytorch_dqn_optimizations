@@ -3,9 +3,9 @@ from torch import nn
 from networks.Layers import NoisyLinearLayer
 
 
-class FeedForwardNN(nn.Module):
+class NoisyFeedForwardNN(nn.Module):
     def __init__(self, in_dim, out_dim, activation=None):
-        super(FeedForwardNN, self).__init__()
+        super(NoisyFeedForwardNN, self).__init__()
         if activation is None:
             self.activation1 = lambda x: x
             self.activation2 = lambda x: x
@@ -27,5 +27,4 @@ class FeedForwardNN(nn.Module):
         x = self.layer2(x)
         x = self.activation2(x)
         x = self.layer3(x)
-        print(x)
         return x

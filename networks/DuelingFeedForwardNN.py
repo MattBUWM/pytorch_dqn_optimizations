@@ -19,8 +19,8 @@ class DuelingFeedForwardNN(nn.Module):
             self.activation2_adv = activation_layer()
             self.activation2_val = activation_layer()
 
-        self.layer1_adv = nn.Linear(in_dim, 256)
-        self.layer1_val = nn.Linear(in_dim, 256)
+        self.layer1_adv = nn.Linear(in_dim[0], 256)
+        self.layer1_val = nn.Linear(in_dim[0], 256)
 
         self.layer2_adv = nn.Linear(256, 128)
         self.layer2_val = nn.Linear(256, 128)

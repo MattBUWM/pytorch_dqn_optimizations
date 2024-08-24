@@ -1,6 +1,7 @@
 import importlib
 
-import envs.SuperJetPakEnv
+import gymnasium as gym
+
 from models.BaseModel import BaseModel
 from models.DQN import DQN
 
@@ -15,15 +16,15 @@ def get_model(name, parameters) -> BaseModel:
 
 
 if __name__ == '__main__':
-    env = envs.SuperJetPakEnv.SuperJetPakEnv('roms/Super_JetPak_DX_DMG-SJPD-UKV.gbc',
-                                             'roms/Super_JetPak_DX_DMG-SJPD-UKV.gbc.state',
-                                             force_gbc=False,
-                                             ticks_per_action=4,
-                                             force_discrete=True,
-                                             flatten=False,
-                                             grayscale=True)
-    model = DQN.load('trained/convolution_dueling_gelu_per')
+    flatten = False
+    env = gym.make('ALE/Boxing-v5', obs_type='grayscale', render_mode='human')
+    env = gym.wrappers.FrameStack(env, 4)
+    if flatten:
+        env = gym.wrappers.FlattenObservation(env)
+
+    model = DQN.load('trained/boxing_convolution_dueling_gelu')
     observation, info = env.reset()
+    env.render()
     for x in range(10000):
         action = model.predict(observation, env)
         observation, reward, terminated, truncated, info = env.step(action)
