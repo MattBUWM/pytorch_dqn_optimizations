@@ -5,8 +5,8 @@ import numpy as np
 
 if __name__ == '__main__':
     path = 'trained/'
-    models = ['all_gelu']
-    file_prefix = 'all_'
+    models = ['convolution_dueling_gelu', 'convolution_dueling_gelu_per', 'convolution_dueling_gelu_multistates', 'convolution_dueling_gelu_multistates_per_v2']
+    file_prefix = 'per_and_multistates_'
     
     for x, y, z in zip(
             [

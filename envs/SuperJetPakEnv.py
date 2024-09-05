@@ -1,3 +1,6 @@
+import os.path
+import random
+
 import cv2
 from gymnasium import Env, spaces
 from pyboy import PyBoy
@@ -96,9 +99,24 @@ class SuperJetPakEnv(Env):
         self.ticks_per_action = ticks_per_action
         self.pyboy = PyBoy(game, cgb=force_gbc, window='null')
         self.pyboy.set_emulation_speed(0)
-        self.pyboy_state = pyboy_state
-        with open(self.pyboy_state, "rb") as x:
-            self.pyboy.load_state(x)
+        if os.path.isdir(pyboy_state):
+            self.pyboy_state = os.listdir(pyboy_state)
+            for x in range(len(self.pyboy_state)):
+                self.pyboy_state[x] = pyboy_state + "/" + self.pyboy_state[x]
+            print('list of states: ', self.pyboy_state)
+            self.multi_states = True
+            self.load_first = True
+            self.last_state = None
+        else:
+            self.pyboy_state = pyboy_state
+            self.multi_states = False
+        if self.multi_states:
+            with open(self.pyboy_state[0], "rb") as x:
+                self.pyboy.load_state(x)
+            print('state loaded from file ', self.pyboy_state[0])
+        else:
+            with open(self.pyboy_state, "rb") as x:
+                self.pyboy.load_state(x)
         self.screen = self.pyboy.screen
         self._action_to_input = [
             'no_op',
@@ -135,8 +153,21 @@ class SuperJetPakEnv(Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        with open(self.pyboy_state, "rb") as x:
-            self.pyboy.load_state(x)
+        if self.multi_states:
+            if self.load_first:
+                state = self.pyboy_state[0]
+                self.load_first = False
+            else:
+                state = None
+                while state == self.last_state or state is None:
+                    state = random.choice(self.pyboy_state)
+            with open(state, "rb") as x:
+                self.pyboy.load_state(x)
+            print('state loaded from file ', state)
+            self.last_state = state
+        else:
+            with open(self.pyboy_state, "rb") as x:
+                self.pyboy.load_state(x)
         self.reward_obj.reset(self.pyboy)
         self.image_process_obj.reset(self.pyboy)
         game_pixels_render = self.screen.ndarray.copy()

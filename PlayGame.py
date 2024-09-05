@@ -3,7 +3,7 @@ import pyboy
 if __name__ == '__main__':
     game = 'roms/Super_JetPak_DX_DMG-SJPD-UKV.gbc'
     pyboy = pyboy.PyBoy(game, cgb=False)
-    with open('roms/Super_JetPak_DX_DMG-SJPD-UKV.gbc.state', "rb") as x:
+    with open('roms/states/state1.state', "rb") as x:
         pyboy.load_state(x)
     while True:
         pyboy.tick()

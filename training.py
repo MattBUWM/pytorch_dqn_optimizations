@@ -15,7 +15,7 @@ def get_model(name, parameters, per=False) -> BaseModel:
 
 if __name__ == '__main__':
     env = envs.SuperJetPakEnv.SuperJetPakEnv('roms/Super_JetPak_DX_DMG-SJPD-UKV.gbc',
-                                             'roms/Super_JetPak_DX_DMG-SJPD-UKV.gbc.state',
+                                             'roms/states',
                                              force_gbc=False,
                                              ticks_per_action=4,
                                              force_discrete=True,
@@ -23,7 +23,7 @@ if __name__ == '__main__':
                                              grayscale=True)
 
     model_parameters = {
-        'model_path': 'trained/convolution_dueling_gelu_per',
+        'model_path': 'trained/convolution_dueling_gelu_multistates_per_v2',
         'optimizer_parameters': {
             'optimizer': 'AdamW',
             'lr': 1e-5,
